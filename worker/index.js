@@ -5,6 +5,10 @@ export default {
       if (request.method !== "POST") return json({ error: "Use POST." }, 405);
       return handleScript(request, env);
     }
+    if (url.pathname === "/api/image") {
+      if (request.method !== "POST") return json({ error: "Use POST." }, 405);
+      return handleImage(request, env);
+    }
     return env.ASSETS.fetch(request);
   },
 };
@@ -59,4 +63,23 @@ function json(obj, status = 200) {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+async function handleImage(request, env) {
+  try {
+    const { prompt } = await request.json();
+    if (!prompt || prompt.length > 1500) {
+      return json({ error: "Invalid prompt." }, 400);
+    }
+    const result = await env.AI.run("@cf/black-forest-labs/flux-1-schnell", {
+      prompt,
+      steps: 4,
+    });
+    const bytes = Uint8Array.from(atob(result.image), (c) => c.charCodeAt(0));
+    return new Response(bytes, { headers: { "Content-Type": "image/png" } });
+  } catch (e) {
+    return json(
+      { error: "Image service is busy or today's free limit was reached. Try again later." },
+      503
+    );
+  }
 }
