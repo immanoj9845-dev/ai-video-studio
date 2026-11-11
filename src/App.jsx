@@ -13,10 +13,14 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [images, setImages] = useState({});
+  const [voices, setVoices] = useState({});
   const [error, setError] = useState("");
 
   function setImg(i, value) {
     setImages((prev) => ({ ...prev, [i]: value }));
+  }
+  function setVoice(i, value) {
+    setVoices((prev) => ({ ...prev, [i]: value }));
   }
 
   async function makeImage(scene, i, character, styleText) {
@@ -40,11 +44,31 @@ export default function App() {
     }
   }
 
+  async function makeVoice(scene, i) {
+    setVoice(i, { status: "loading" });
+    try {
+      const res = await fetch("/api/voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: scene.narration }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Voice failed");
+      }
+      const blob = await res.blob();
+      setVoice(i, { status: "done", url: URL.createObjectURL(blob) });
+    } catch (e) {
+      setVoice(i, { status: "error", message: e.message });
+    }
+  }
+
   async function generate() {
     setLoading(true);
     setError("");
     setResult(null);
     setImages({});
+    setVoices({});
     try {
       const res = await fetch("/api/script", {
         method: "POST",
@@ -56,6 +80,7 @@ export default function App() {
       setResult(data);
       for (let i = 0; i < data.scenes.length; i++) {
         await makeImage(data.scenes[i], i, data.character, STYLES[style]);
+        await makeVoice(data.scenes[i], i);
       }
     } catch (e) {
       setError(e.message);
@@ -66,7 +91,7 @@ export default function App() {
   return (
     <div className="app">
       <h1>AI Video Studio</h1>
-      <p className="sub">Type an idea and get a script with pictures.</p>
+      <p className="sub">Type an idea and get a script with pictures and voice.</p>
 
       <textarea
         value={idea}
@@ -81,7 +106,7 @@ export default function App() {
           ))}
         </select>
         <button onClick={generate} disabled={loading || !idea.trim()}>
-          {loading ? "Working..." : "Create Script + Images"}
+          {loading ? "Working..." : "Create Script + Images + Voice"}
         </button>
       </div>
 
@@ -93,6 +118,7 @@ export default function App() {
           <p><b>Character:</b> {result.character}</p>
           {result.scenes.map((s, i) => {
             const img = images[i];
+            const voice = voices[i];
             return (
               <div className="scene" key={i}>
                 <h3>Scene {i + 1}</h3>
@@ -110,6 +136,16 @@ export default function App() {
                   </p>
                 )}
                 <p><b>Narration:</b> {s.narration}</p>
+                {voice?.status === "done" && <audio controls src={voice.url} />}
+                {voice?.status === "loading" && <p className="sub">Recording voice...</p>}
+                {voice?.status === "error" && (
+                  <p className="error">
+                    {voice.message}{" "}
+                    <button className="small" onClick={() => makeVoice(s, i)}>
+                      Retry
+                    </button>
+                  </p>
+                )}
               </div>
             );
           })}

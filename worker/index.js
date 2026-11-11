@@ -9,6 +9,10 @@ export default {
       if (request.method !== "POST") return json({ error: "Use POST." }, 405);
       return handleImage(request, env);
     }
+    if (url.pathname === "/api/voice") {
+      if (request.method !== "POST") return json({ error: "Use POST." }, 405);
+      return handleVoice(request, env);
+    }
     return env.ASSETS.fetch(request);
   },
 };
@@ -79,6 +83,26 @@ async function handleImage(request, env) {
   } catch (e) {
     return json(
       { error: "Image service is busy or today's free limit was reached. Try again later." },
+      503
+    );
+  }
+}
+async function handleVoice(request, env) {
+  try {
+    const { text } = await request.json();
+    if (!text || text.length > 600) {
+      return json({ error: "Invalid text." }, 400);
+    }
+    const result = await env.AI.run("@cf/myshell-ai/melotts", {
+      prompt: text,
+      lang: "en",
+    });
+    const audio = typeof result === "string" ? result : result.audio;
+    const bytes = Uint8Array.from(atob(audio), (c) => c.charCodeAt(0));
+    return new Response(bytes, { headers: { "Content-Type": "audio/mpeg" } });
+  } catch (e) {
+    return json(
+      { error: "Voice service is busy or today's free limit was reached. Try again later." },
       503
     );
   }
