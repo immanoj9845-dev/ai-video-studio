@@ -29,7 +29,7 @@ Return ONLY JSON in this exact shape:
 Use 4 to 6 scenes. Keep the language simple and friendly.`;
 
     const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
       {
         method: "POST",
         headers: {
