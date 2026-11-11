@@ -11,3 +11,5 @@ select { margin-top: 12px; padding: 12px; border-radius: 8px; border: 1px solid 
 img { width: 100%; border-radius: 8px; margin-bottom: 8px; }
 button.small { margin: 0 0 0 8px; padding: 4px 12px; font-size: 14px; }
 audio { width: 100%; margin: 4px 0 8px; }
+.final { width: 100%; margin-top: 12px; border-radius: 8px; }
+.download { display: inline-block; margin-top: 8px; padding: 12px 24px; background: #22c55e; color: white; border-radius: 8px; text-decoration: none; }

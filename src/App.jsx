@@ -1,5 +1,6 @@
 import { useState } from "react";
 import "./App.css";
+import { buildVideo } from "./buildVideo";
 
 const STYLES = {
   Cartoon: "colorful 2D cartoon style, bold outlines, bright colors",
@@ -15,6 +16,9 @@ export default function App() {
   const [images, setImages] = useState({});
   const [voices, setVoices] = useState({});
   const [error, setError] = useState("");
+  const [building, setBuilding] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [video, setVideo] = useState(null);
 
   function setImg(i, value) {
     setImages((prev) => ({ ...prev, [i]: value }));
@@ -69,6 +73,7 @@ export default function App() {
     setResult(null);
     setImages({});
     setVoices({});
+    setVideo(null);
     try {
       const res = await fetch("/api/script", {
         method: "POST",
@@ -87,6 +92,32 @@ export default function App() {
     }
     setLoading(false);
   }
+
+  async function makeVideo() {
+    setVideo(null);
+    setError("");
+    setBuilding(true);
+    setProgress("Starting...");
+    try {
+      const scenes = result.scenes.map((_, i) => ({
+        imageUrl: images[i].url,
+        audioUrl: voices[i].url,
+      }));
+      const v = await buildVideo(scenes, setProgress);
+      setVideo(v);
+    } catch (e) {
+      setError(e.message);
+    }
+    setProgress("");
+    setBuilding(false);
+  }
+
+  const allReady =
+    result &&
+    !loading &&
+    result.scenes.every(
+      (_, i) => images[i]?.status === "done" && voices[i]?.status === "done"
+    );
 
   return (
     <div className="app">
@@ -149,6 +180,28 @@ export default function App() {
               </div>
             );
           })}
+
+          {allReady && (
+            <div className="scene">
+              <h3>Final video</h3>
+              <button onClick={makeVideo} disabled={building}>
+                {building ? "Recording..." : "Make Video"}
+              </button>
+              {progress && <p className="sub">{progress}</p>}
+              {video && (
+                <>
+                  <video controls src={video.url} className="final" />
+                  <a
+                    className="download"
+                    href={video.url}
+                    download={`${(result.title || "video").replace(/[^a-z0-9]+/gi, "-")}.${video.ext}`}
+                  >
+                    Download video (.{video.ext})
+                  </a>
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
