@@ -100,8 +100,9 @@ export default function App() {
     setProgress("Starting...");
     try {
       const scenes = result.scenes.map((_, i) => ({
-        imageUrl: images[i].url,
+               imageUrl: images[i].url,
         audioUrl: voices[i].url,
+        text: result.scenes[i].narration,
       }));
       const v = await buildVideo(scenes, setProgress);
       setVideo(v);

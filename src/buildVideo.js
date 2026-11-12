@@ -25,11 +25,39 @@ function makeBackground(img) {
   return c;
 }
 
-// p goes from 0 to 1 during the scene: a slow zoom-in
 function drawFrame(ctx, item, p) {
   ctx.drawImage(item.bg, 0, 0);
   const size = H * (1 + 0.08 * p);
   ctx.drawImage(item.img, (W - size) / 2, (H - size) / 2, size, size);
+  drawCaption(ctx, item.text);
+}
+
+function drawCaption(ctx, text) {
+  if (!text) return;
+  const fontSize = 32;
+  ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const maxWidth = W - 160;
+  const lines = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const test = line ? line + " " + word : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  const lineH = fontSize * 1.35;
+  const boxH = lines.length * lineH + 24;
+  const boxY = H - boxH - 30;
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(60, boxY, W - 120, boxH);
+  ctx.fillStyle = "#ffffff";
+  lines.forEach((l, i) => ctx.fillText(l, W / 2, boxY + 12 + lineH * (i + 0.5)));
 }
 
 function pickMime() {
@@ -64,7 +92,7 @@ export async function buildVideo(scenes, onProgress) {
     const img = await loadImage(s.imageUrl);
     const arr = await (await fetch(s.audioUrl)).arrayBuffer();
     const buf = await audioCtx.decodeAudioData(arr);
-    items.push({ img, buf, bg: makeBackground(img) });
+        items.push({ img, buf, bg: makeBackground(img), text: s.text });
   }
 
   drawFrame(ctx, items[0], 0);
