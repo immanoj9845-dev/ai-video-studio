@@ -39,9 +39,18 @@ async function callGemini(prompt, env) {
           }),
         }
       );
-      const data = await res.json().catch(() => ({}));
+           const raw = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(raw);
+      } catch (e) {}
       if (res.ok) return { ok: true, data };
-      last = { status: res.status, error: data.error?.message || "AI service error." };
+      last = {
+        status: res.status,
+        error:
+          data.error?.message ||
+          `AI service error (status ${res.status}): ${raw.slice(0, 200)}`,
+      };
       if (![429, 500, 503].includes(res.status)) break;
       await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
     }
