@@ -17,6 +17,38 @@ export default {
   },
 };
 
+// Models are tried in order. To add a backup, copy another model name
+// from Google AI Studio's model list and add it to this list.
+const GEMINI_MODELS = ["gemini-3.8-flash"];
+
+async function callGemini(prompt, env) {
+  let last = { status: 502, error: "AI service error." };
+  for (const model of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": env.GEMINI_API_KEY,
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" },
+          }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) return { ok: true, data };
+      last = { status: res.status, error: data.error?.message || "AI service error." };
+      if (![429, 500, 503].includes(res.status)) break;
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+  return { ok: false, ...last };
+}
+
 async function handleScript(request, env) {
   try {
     const { idea } = await request.json();
@@ -36,38 +68,26 @@ Return ONLY JSON in this exact shape:
 }
 Use 4 to 6 scenes. Keep the language simple and friendly.`;
 
-    const res = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": env.GEMINI_API_KEY,
+    const out = await callGemini(prompt, env);
+    if (!out.ok) {
+      const busy = [429, 500, 503].includes(out.status);
+      return json(
+        {
+          error: busy
+            ? "The AI is very busy right now. Please wait a minute and try again."
+            : out.error,
         },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json" },
-        }),
-      }
-    );
-
-    const data = await res.json();
-    if (!res.ok) {
-      return json({ error: data.error?.message || "AI service error." }, 502);
+        502
+      );
     }
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    const text = out.data.candidates?.[0]?.content?.parts?.[0]?.text;
     return json(JSON.parse(text));
   } catch (e) {
     return json({ error: "Something went wrong. Please try again." }, 500);
   }
 }
 
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 async function handleImage(request, env) {
   try {
     const { prompt } = await request.json();
@@ -87,6 +107,7 @@ async function handleImage(request, env) {
     );
   }
 }
+
 async function handleVoice(request, env) {
   try {
     const { text } = await request.json();
@@ -106,4 +127,11 @@ async function handleVoice(request, env) {
       503
     );
   }
+}
+
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
