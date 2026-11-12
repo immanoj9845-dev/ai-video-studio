@@ -19,6 +19,7 @@ export default function App() {
   const [building, setBuilding] = useState(false);
   const [progress, setProgress] = useState("");
   const [video, setVideo] = useState(null);
+    const [music, setMusic] = useState(null);
 
   function setImg(i, value) {
     setImages((prev) => ({ ...prev, [i]: value }));
@@ -104,7 +105,7 @@ export default function App() {
         audioUrl: voices[i].url,
         text: result.scenes[i].narration,
       }));
-      const v = await buildVideo(scenes, setProgress);
+        const v = await buildVideo(scenes, setProgress, music);
       setVideo(v);
     } catch (e) {
       setError(e.message);
@@ -184,7 +185,15 @@ export default function App() {
 
           {allReady && (
             <div className="scene">
-              <h3>Final video</h3>
+                <h3>Final video</h3>
+  <p className="sub">
+    Optional: add your own background music (only use music you have the right to use).
+  </p>
+  <input
+    type="file"
+    accept="audio/*"
+    onChange={(e) => setMusic(e.target.files[0] || null)}
+  />
               <button onClick={makeVideo} disabled={building}>
                 {building ? "Recording..." : "Make Video"}
               </button>

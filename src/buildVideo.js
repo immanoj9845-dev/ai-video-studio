@@ -11,7 +11,6 @@ function loadImage(url) {
   });
 }
 
-// Blurred, darkened copy of the picture to fill the wide 16:9 frame
 function makeBackground(img) {
   const c = document.createElement("canvas");
   c.width = W;
@@ -23,13 +22,6 @@ function makeBackground(img) {
   g.fillStyle = "rgba(0,0,0,0.45)";
   g.fillRect(0, 0, W, H);
   return c;
-}
-
-function drawFrame(ctx, item, p) {
-  ctx.drawImage(item.bg, 0, 0);
-  const size = H * (1 + 0.08 * p);
-  ctx.drawImage(item.img, (W - size) / 2, (H - size) / 2, size, size);
-  drawCaption(ctx, item.text);
 }
 
 function drawCaption(ctx, text) {
@@ -60,6 +52,17 @@ function drawCaption(ctx, text) {
   lines.forEach((l, i) => ctx.fillText(l, W / 2, boxY + 12 + lineH * (i + 0.5)));
 }
 
+// Four motion styles, rotating by scene: zoom in, zoom out, zoom + pan left, zoom out + pan right
+function drawFrame(ctx, item, p) {
+  ctx.drawImage(item.bg, 0, 0);
+  const m = item.motion;
+  const zoom = m % 2 === 0 ? p : 1 - p;
+  const size = H * (1 + 0.08 * zoom);
+  const pan = m === 2 ? -40 * (p - 0.5) : m === 3 ? 40 * (p - 0.5) : 0;
+  ctx.drawImage(item.img, (W - size) / 2 + pan, (H - size) / 2, size, size);
+  drawCaption(ctx, item.text);
+}
+
 function pickMime() {
   const options = [
     "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
@@ -71,7 +74,7 @@ function pickMime() {
   return options.find((m) => MediaRecorder.isTypeSupported(m)) || "";
 }
 
-export async function buildVideo(scenes, onProgress) {
+export async function buildVideo(scenes, onProgress, musicFile) {
   const mime = pickMime();
   if (!mime || !HTMLCanvasElement.prototype.captureStream) {
     throw new Error("This browser can't record video. Please use Chrome on a computer.");
@@ -92,7 +95,29 @@ export async function buildVideo(scenes, onProgress) {
     const img = await loadImage(s.imageUrl);
     const arr = await (await fetch(s.audioUrl)).arrayBuffer();
     const buf = await audioCtx.decodeAudioData(arr);
-        items.push({ img, buf, bg: makeBackground(img), text: s.text });
+    items.push({
+      img,
+      buf,
+      bg: makeBackground(img),
+      text: s.text,
+      motion: items.length % 4,
+    });
+  }
+
+  let music = null;
+  if (musicFile) {
+    try {
+      const mbuf = await audioCtx.decodeAudioData(await musicFile.arrayBuffer());
+      music = audioCtx.createBufferSource();
+      music.buffer = mbuf;
+      music.loop = true;
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.15;
+      music.connect(gain);
+      gain.connect(dest);
+    } catch (e) {
+      throw new Error("Could not read that music file. Try an MP3 or WAV.");
+    }
   }
 
   drawFrame(ctx, items[0], 0);
@@ -108,6 +133,7 @@ export async function buildVideo(scenes, onProgress) {
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   const stopped = new Promise((resolve) => (recorder.onstop = resolve));
   recorder.start(1000);
+  if (music) music.start();
 
   for (let i = 0; i < items.length; i++) {
     onProgress(`Recording scene ${i + 1} of ${items.length}... keep this tab open`);
@@ -129,6 +155,7 @@ export async function buildVideo(scenes, onProgress) {
     });
   }
 
+  if (music) music.stop();
   recorder.stop();
   await stopped;
   audioCtx.close();
