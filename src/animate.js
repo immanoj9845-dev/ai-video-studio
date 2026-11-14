@@ -2,9 +2,22 @@ import { Client, handle_file } from "@gradio/client";
 
 const SPACE = "zerogpu-aoti/wan2-2-fp8da-aoti-faster";
 const ENDPOINT = "/generate_video";
+const SPACE_URL = "https://zerogpu-aoti-wan2-2-fp8da-aoti-faster.hf.space";
+
+async function connect(token) {
+  const opts = token ? { hf_token: token, token } : {};
+  try {
+    return await Client.connect(SPACE_URL, opts);
+  } catch (e) {
+    return await Client.connect(SPACE, opts);
+  }
+}
 
 function friendly(msg) {
   const m = String(msg || "");
+    if (/metadata|failed to fetch|network/i.test(m)) {
+    return "Could not reach the free AI video service (Hugging Face). Check your internet connection and any ad blocker, then try again.";
+  }
   if (/quota|gpu/i.test(m)) {
     return "The free AI video quota is used up. Try again later (it resets daily), or add a free Hugging Face token below for a bit more.";
   }
@@ -34,8 +47,7 @@ function findUrl(x) {
 export async function animateImage(imageUrl, prompt, token, onStatus) {
   try {
     onStatus("Connecting to the free AI video service...");
-    const client = await Client.connect(SPACE, token ? { hf_token: token, token } : {});
-    const api = await client.view_api();
+    const client = await connect(token);    const api = await client.view_api();
     const ep = api.named_endpoints?.[ENDPOINT];
     if (!ep) {
       throw new Error("The free AI video service has changed and can't be used right now.");
