@@ -14,3 +14,8 @@ audio { width: 100%; margin: 4px 0 8px; }
 .final { width: 100%; margin-top: 12px; border-radius: 8px; }
 .download { display: inline-block; margin-top: 8px; padding: 12px 24px; background: #22c55e; color: white; border-radius: 8px; text-decoration: none; }
 input[type="file"] { display: block; margin: 8px 0 12px; }
+video.clip { width: 100%; border-radius: 8px; margin-bottom: 8px; }
+.scene > button.small { margin: 0 0 8px 0; }
+.tokenbox { margin-top: 12px; }
+.tokenbox summary { cursor: pointer; color: #94a3b8; }
+input[type="password"] { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: inherit; box-sizing: border-box; }

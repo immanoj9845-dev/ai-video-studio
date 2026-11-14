@@ -11,6 +11,19 @@ function loadImage(url) {
   });
 }
 
+function loadVideo(url) {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    v.muted = true;
+    v.loop = true;
+    v.playsInline = true;
+    v.preload = "auto";
+    v.onloadeddata = () => resolve(v);
+    v.onerror = () => reject(new Error("clip failed to load"));
+    v.src = url;
+  });
+}
+
 function makeBackground(img) {
   const c = document.createElement("canvas");
   c.width = W;
@@ -52,14 +65,21 @@ function drawCaption(ctx, text) {
   lines.forEach((l, i) => ctx.fillText(l, W / 2, boxY + 12 + lineH * (i + 0.5)));
 }
 
-// Four motion styles, rotating by scene: zoom in, zoom out, zoom + pan left, zoom out + pan right
 function drawFrame(ctx, item, p) {
   ctx.drawImage(item.bg, 0, 0);
-  const m = item.motion;
-  const zoom = m % 2 === 0 ? p : 1 - p;
-  const size = H * (1 + 0.08 * zoom);
-  const pan = m === 2 ? -40 * (p - 0.5) : m === 3 ? 40 * (p - 0.5) : 0;
-  ctx.drawImage(item.img, (W - size) / 2 + pan, (H - size) / 2, size, size);
+  const v = item.video;
+  if (v && v.videoWidth) {
+    const s = Math.min(W / v.videoWidth, H / v.videoHeight);
+    const w = v.videoWidth * s;
+    const h = v.videoHeight * s;
+    ctx.drawImage(v, (W - w) / 2, (H - h) / 2, w, h);
+  } else {
+    const m = item.motion;
+    const zoom = m % 2 === 0 ? p : 1 - p;
+    const size = H * (1 + 0.08 * zoom);
+    const pan = m === 2 ? -40 * (p - 0.5) : m === 3 ? 40 * (p - 0.5) : 0;
+    ctx.drawImage(item.img, (W - size) / 2 + pan, (H - size) / 2, size, size);
+  }
   drawCaption(ctx, item.text);
 }
 
@@ -95,9 +115,11 @@ export async function buildVideo(scenes, onProgress, musicFile) {
     const img = await loadImage(s.imageUrl);
     const arr = await (await fetch(s.audioUrl)).arrayBuffer();
     const buf = await audioCtx.decodeAudioData(arr);
+    const video = s.clipUrl ? await loadVideo(s.clipUrl).catch(() => null) : null;
     items.push({
       img,
       buf,
+      video,
       bg: makeBackground(img),
       text: s.text,
       motion: items.length % 4,
@@ -142,6 +164,10 @@ export async function buildVideo(scenes, onProgress, musicFile) {
     src.buffer = item.buf;
     src.connect(dest);
     src.start();
+    if (item.video) {
+      item.video.currentTime = 0;
+      await item.video.play().catch(() => {});
+    }
     const dur = item.buf.duration + 0.6;
     const t0 = performance.now();
     await new Promise((resolve) => {
@@ -153,6 +179,7 @@ export async function buildVideo(scenes, onProgress, musicFile) {
       }
       requestAnimationFrame(frame);
     });
+    if (item.video) item.video.pause();
   }
 
   if (music) music.stop();
