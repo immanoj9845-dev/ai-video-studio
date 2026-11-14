@@ -1,8 +1,8 @@
 import { Client, handle_file } from "@gradio/client";
 
 const SPACE = "zerogpu-aoti/wan2-2-fp8da-aoti-faster";
-const ENDPOINT = "/generate_video";
 const SPACE_URL = "https://zerogpu-aoti-wan2-2-fp8da-aoti-faster.hf.space";
+const ENDPOINT = "/generate_video";
 
 async function connect(token) {
   const opts = token ? { hf_token: token, token } : {};
@@ -15,7 +15,7 @@ async function connect(token) {
 
 function friendly(msg) {
   const m = String(msg || "");
-    if (/metadata|failed to fetch|network/i.test(m)) {
+  if (/metadata|failed to fetch|network/i.test(m)) {
     return "Could not reach the free AI video service (Hugging Face). Check your internet connection and any ad blocker, then try again.";
   }
   if (/quota|gpu/i.test(m)) {
@@ -36,6 +36,9 @@ function findUrl(x) {
   }
   if (typeof x === "object") {
     if (typeof x.url === "string") return x.url;
+    if (typeof x.path === "string" && /\.(mp4|webm|mov)$/i.test(x.path)) {
+      return `${SPACE_URL}/gradio_api/file=${x.path}`;
+    }
     for (const k of Object.keys(x)) {
       const u = findUrl(x[k]);
       if (u) return u;
@@ -47,7 +50,8 @@ function findUrl(x) {
 export async function animateImage(imageUrl, prompt, token, onStatus) {
   try {
     onStatus("Connecting to the free AI video service...");
-    const client = await connect(token);    const api = await client.view_api();
+    const client = await connect(token);
+    const api = await client.view_api();
     const ep = api.named_endpoints?.[ENDPOINT];
     if (!ep) {
       throw new Error("The free AI video service has changed and can't be used right now.");
@@ -74,7 +78,8 @@ export async function animateImage(imageUrl, prompt, token, onStatus) {
     }
 
     onStatus("Animating... this can take a few minutes");
-    let data = null;
+    let found = null;
+    const seen = [];
     for await (const msg of client.submit(ENDPOINT, payload)) {
       if (msg.type === "status") {
         if (msg.stage === "error") throw new Error(msg.message || "AI video failed.");
@@ -84,15 +89,26 @@ export async function animateImage(imageUrl, prompt, token, onStatus) {
           onStatus("Generating the clip...");
         }
       }
-      if (msg.type === "data") data = msg.data;
+      if (msg.type === "data" || msg.type === "update") {
+        seen.push(msg.data);
+        found = findUrl(msg.data) || found;
+      }
     }
+    console.log("AI video reply:", seen);
 
-    const url = findUrl(data);
-    if (!url) throw new Error("The AI video service did not return a clip.");
-    const res = await fetch(url);
+    if (!found) {
+      const err = new Error(
+        "The AI video service did not return a clip. Details: " +
+          JSON.stringify(seen).slice(0, 400)
+      );
+      err.keep = true;
+      throw err;
+    }
+    const res = await fetch(found);
     if (!res.ok) throw new Error("Could not download the clip.");
     return URL.createObjectURL(await res.blob());
   } catch (e) {
+    if (e && e.keep) throw e;
     throw new Error(friendly(e?.message || String(e)));
   }
 }
