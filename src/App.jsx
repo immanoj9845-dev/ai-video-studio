@@ -37,6 +37,7 @@ export default function App() {
     { key: "script", label: "Writing your script…" },
     { key: "images", label: "Painting scenes…" },
     { key: "voices", label: "Recording voiceover…" },
+    { key: "animation", label: "Animating scenes…" },
   ]);
 
   const progressOverlayRef = useRef(null);
@@ -134,7 +135,7 @@ export default function App() {
           Promise.all([makeImage(s, i, data.character, STYLES[style]), makeVoice(s, i)])
         )
       );
-      setProgressStep(3);
+      setProgressStep(4);
     } catch (e) {
       setError(e.message);
     }
@@ -311,13 +312,14 @@ export default function App() {
               ))}
             </div>
             <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${(progressStep / 3) * 100}%` }}></div>
+              <div className="progress-fill" style={{ width: `${(progressStep / 4) * 100}%` }}></div>
             </div>
             <p className="progress-message">
               {progressStep === 0 && "Thinking about your story…"}
               {progressStep === 1 && "Generating beautiful images…"}
               {progressStep === 2 && "Recording natural voiceover…"}
-              {progressStep === 3 && "Almost done…"}
+              {progressStep === 3 && "Animating scenes…"}
+              {progressStep === 4 && "Almost done…"}
             </p>
           </div>
         </div>
