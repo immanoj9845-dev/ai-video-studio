@@ -1,6 +1,10 @@
-const W = 1280;
-const H = 720;
-const FPS = 30;
+const EXPORT_RESOLUTIONS = {
+  "360p": { width: 640, height: 360 },
+  "720p": { width: 1280, height: 720 },
+  "1080p": { width: 1920, height: 1080 },
+};
+
+const EXPORT_FRAMERATES = [12, 24, 30];
 
 function loadImage(url) {
   return new Promise((resolve, reject) => {
@@ -24,80 +28,89 @@ function loadVideo(url) {
   });
 }
 
-function makeBackground(img) {
-  const c = document.createElement("canvas");
-  c.width = W;
-  c.height = H;
-  const g = c.getContext("2d");
-  g.filter = "blur(30px)";
-  g.drawImage(img, -40, -(W - H) / 2 - 40, W + 80, W + 80);
-  g.filter = "none";
-  g.fillStyle = "rgba(0,0,0,0.45)";
-  g.fillRect(0, 0, W, H);
-  return c;
-}
-
-function drawCaption(ctx, text) {
-  if (!text) return;
-  const fontSize = 32;
-  ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  const maxWidth = W - 160;
-  const lines = [];
-  let line = "";
-  for (const word of text.split(" ")) {
-    const test = line ? line + " " + word : word;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = test;
-    }
-  }
-  if (line) lines.push(line);
-  const lineH = fontSize * 1.35;
-  const boxH = lines.length * lineH + 24;
-  const boxY = H - boxH - 30;
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
-  ctx.fillRect(60, boxY, W - 120, boxH);
-  ctx.fillStyle = "#ffffff";
-  lines.forEach((l, i) => ctx.fillText(l, W / 2, boxY + 12 + lineH * (i + 0.5)));
-}
-
-function drawFrame(ctx, item, p) {
-  ctx.drawImage(item.bg, 0, 0);
-  const v = item.video;
-  if (v && v.videoWidth) {
-    const s = Math.min(W / v.videoWidth, H / v.videoHeight);
-    const w = v.videoWidth * s;
-    const h = v.videoHeight * s;
-    ctx.drawImage(v, (W - w) / 2, (H - h) / 2, w, h);
-  } else {
-    const m = item.motion;
-    const zoom = m % 2 === 0 ? p : 1 - p;
-    const size = H * (1 + 0.08 * zoom);
-    const pan = m === 2 ? -40 * (p - 0.5) : m === 3 ? 40 * (p - 0.5) : 0;
-    ctx.drawImage(item.img, (W - size) / 2 + pan, (H - size) / 2, size, size);
-  }
-  drawCaption(ctx, item.text);
-}
-
-function pickMime() {
-  const options = [
+function pickMime(format) {
+  const mimeOptions = [
     "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
     "video/mp4",
     "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp8,opus",
     "video/webm",
   ];
-  return options.find((m) => MediaRecorder.isTypeSupported(m)) || "";
+  const filteredOptions = format
+    ? mimeOptions.filter((m) => m.startsWith(`video/${format}`))
+    : mimeOptions;
+  return filteredOptions.find((m) => MediaRecorder.isTypeSupported(m)) || "";
 }
 
-export async function buildVideo(scenes, onProgress, musicFile) {
-  const mime = pickMime();
+export async function buildVideo(scenes, onProgress, musicFile, options = {}) {
+  const resolution = options.resolution || "720p";
+  const framerate = options.framerate || 30;
+  const format = options.format;
+  const { width: W, height: H } = EXPORT_RESOLUTIONS[resolution] || EXPORT_RESOLUTIONS["720p"];
+  const FPS = EXPORT_FRAMERATES.includes(framerate) ? framerate : 30;
+
+  const mime = pickMime(format);
   if (!mime || !HTMLCanvasElement.prototype.captureStream) {
     throw new Error("This browser can't record video. Please use Chrome on a computer.");
+  }
+
+  function makeBackground(img) {
+    const c = document.createElement("canvas");
+    c.width = W;
+    c.height = H;
+    const g = c.getContext("2d");
+    g.filter = "blur(30px)";
+    g.drawImage(img, -40, -(W - H) / 2 - 40, W + 80, W + 80);
+    g.filter = "none";
+    g.fillStyle = "rgba(0,0,0,0.45)";
+    g.fillRect(0, 0, W, H);
+    return c;
+  }
+
+  function drawCaption(ctx, text) {
+    if (!text) return;
+    const fontSize = Math.floor(H / 22);
+    ctx.font = `bold ${fontSize}px system-ui, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const maxWidth = W - 160;
+    const lines = [];
+    let line = "";
+    for (const word of text.split(" ")) {
+      const test = line ? line + " " + word : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    const lineH = fontSize * 1.35;
+    const boxH = lines.length * lineH + 24;
+    const boxY = H - boxH - (H / 24);
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(60, boxY, W - 120, boxH);
+    ctx.fillStyle = "#ffffff";
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, boxY + 12 + lineH * (i + 0.5)));
+  }
+
+  function drawFrame(ctx, item, p) {
+    ctx.drawImage(item.bg, 0, 0);
+    const v = item.video;
+    if (v && v.videoWidth) {
+      const s = Math.min(W / v.videoWidth, H / v.videoHeight);
+      const w = v.videoWidth * s;
+      const h = v.videoHeight * s;
+      ctx.drawImage(v, (W - w) / 2, (H - h) / 2, w, h);
+    } else {
+      const m = item.motion;
+      const zoom = m % 2 === 0 ? p : 1 - p;
+      const size = Math.max(W, H) * (1 + 0.08 * zoom);
+      const pan = m === 2 ? -40 * (p - 0.5) : m === 3 ? 40 * (p - 0.5) : 0;
+      ctx.drawImage(item.img, (W - size) / 2 + pan, (H - size) / 2, size, size);
+    }
+    drawCaption(ctx, item.text);
   }
 
   const canvas = document.createElement("canvas");
@@ -149,8 +162,9 @@ export async function buildVideo(scenes, onProgress, musicFile) {
   ]);
   const recorder = new MediaRecorder(stream, {
     mimeType: mime,
-    videoBitsPerSecond: 4000000,
+    videoBitsPerSecond: resolution === "1080p" ? 8000000 : resolution === "720p" ? 4000000 : 2000000,
   });
+
   const chunks = [];
   recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   const stopped = new Promise((resolve) => (recorder.onstop = resolve));

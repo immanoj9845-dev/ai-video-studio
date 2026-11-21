@@ -10,6 +10,23 @@ const STYLES = {
   "3D": "cute 3D animated movie style, soft lighting",
 };
 
+const EXPORT_FORMATS = [
+  { value: "mp4", label: "MP4 (H.264)", mime: "video/mp4;codecs=avc1.42E01E,mp4a.40.2" },
+  { value: "webm", label: "WebM (VP9)", mime: "video/webm;codecs=vp9,opus" },
+];
+
+const EXPORT_RESOLUTIONS = [
+  { value: "360p", label: "360p (640×360)", width: 640, height: 360 },
+  { value: "720p", label: "720p (1280×720)", width: 1280, height: 720 },
+  { value: "1080p", label: "1080p (1920×1080)", width: 1920, height: 1080 },
+];
+
+const EXPORT_FRAMERATES = [
+  { value: 12, label: "12 FPS" },
+  { value: 24, label: "24 FPS" },
+  { value: 30, label: "30 FPS" },
+];
+
 const EXAMPLE_PROMPTS = [
   "A curious fox discovers a glowing mushroom in an ancient forest",
   "A tiny robot learns to paint with watercolors",
@@ -33,12 +50,40 @@ export default function App() {
   const [animating, setAnimating] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
+
+  // New feature state
+  const [exportFormat, setExportFormat] = useState("mp4");
+  const [exportResolution, setExportResolution] = useState("720p");
+  const [exportFramerate, setExportFramerate] = useState(30);
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [history, setHistory] = useState([]);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [audioMix, setAudioMix] = useState({
+    musicVolume: 0.15,
+    voiceVolume: 1.0,
+    musicMuted: false,
+    voiceMuted: false,
+    musicSolo: false,
+    voiceSolo: false,
+  });
+  const [timelineScenes, setTimelineScenes] = useState([]);
+  const [selectedScene, setSelectedScene] = useState(null);
+
   const [progressSteps] = useState([
     { key: "script", label: "Writing your script…" },
     { key: "images", label: "Painting scenes…" },
     { key: "voices", label: "Recording voiceover…" },
     { key: "animation", label: "Animating scenes…" },
   ]);
+
+  // Load history on mount
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   const progressOverlayRef = useRef(null);
   const progressStepsRef = useRef(null);
@@ -156,12 +201,68 @@ export default function App() {
         text: result.scenes[i].narration,
         clipUrl: clips[i]?.status === "done" ? clips[i].url : null,
       }));
-      setVideo(await buildVideo(scenes, setProgress, music));
+      setVideo(await buildVideo(scenes, setProgress, music, {
+        format: exportFormat,
+        resolution: exportResolution,
+        framerate: exportFramerate,
+      }));
     } catch (e) {
       setError(e.message);
     }
     setProgress("");
     setBuilding(false);
+  }
+
+  // History management
+  function saveToHistory(videoData) {
+    const entry = {
+      id: Date.now().toString(),
+      title: result.title || "Untitled Video",
+      idea,
+      style,
+      character: result.character,
+      scenes: result.scenes,
+      videoUrl: videoData.url,
+      videoExt: videoData.ext,
+      createdAt: new Date().toISOString(),
+      exportSettings: {
+        format: exportFormat,
+        resolution: exportResolution,
+        framerate: exportFramerate,
+      },
+    };
+    const updated = [entry, ...history.slice(0, 19)]; // Keep last 20
+    setHistory(updated);
+    localStorage.setItem("ai-video-studio-history", JSON.stringify(updated));
+  }
+
+  function loadHistory() {
+    try {
+      const stored = localStorage.getItem("ai-video-studio-history");
+      if (stored) setHistory(JSON.parse(stored));
+    } catch (e) {
+      console.warn("Failed to load history:", e);
+    }
+  }
+
+  function rerunFromHistory(entry) {
+    setIdea(entry.idea);
+    setStyle(entry.style);
+    setShowHistory(false);
+    generate();
+  }
+
+  function copyShareLink(entry) {
+    const url = `${window.location.origin}?history=${entry.id}`;
+    navigator.clipboard.writeText(url);
+    setError("Link copied to clipboard!");
+    setTimeout(() => setError(""), 3000);
+  }
+
+  function deleteHistoryEntry(id) {
+    const updated = history.filter((h) => h.id !== id);
+    setHistory(updated);
+    localStorage.setItem("ai-video-studio-history", JSON.stringify(updated));
   }
 
   function fillExample(prompt) {
@@ -463,6 +564,10 @@ export default function App() {
                       <button className="btn btn-secondary" onClick={() => { setVideo(null); setMusic(null); }}>
                         Make Another
                       </button>
+                      <button className="btn btn-secondary" onClick={() => setShowExportModal(true)}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Export Options
+                      </button>
                     </div>
                   </>
                 ) : (
@@ -497,6 +602,10 @@ export default function App() {
                       >
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
                         {building ? "Assembling…" : "Make Final Video"}
+                      </button>
+                      <button className="btn btn-secondary" onClick={() => setShowExportModal(true)}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Export Options
                       </button>
                     </div>
                     {progress && <p className="progress-message" style={{ marginTop: 'var(--space-3)', textAlign: 'center' }}>{progress}</p>}
@@ -569,6 +678,65 @@ export default function App() {
           </div>
         </section>
       </main>
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="modal-overlay" onClick={() => setShowExportModal(false)} role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 id="export-modal-title" className="modal-title">Export Options</h2>
+              <button className="modal-close" onClick={() => setShowExportModal(false)} aria-label="Close export options">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="modal-field">
+                <label htmlFor="export-format" className="modal-label">Format</label>
+                <select
+                  id="export-format"
+                  className="modal-select"
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value)}
+                >
+                  {EXPORT_FORMATS.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="modal-field">
+                <label htmlFor="export-resolution" className="modal-label">Resolution</label>
+                <select
+                  id="export-resolution"
+                  className="modal-select"
+                  value={exportResolution}
+                  onChange={(e) => setExportResolution(e.target.value)}
+                >
+                  {EXPORT_RESOLUTIONS.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="modal-field">
+                <label htmlFor="export-framerate" className="modal-label">Framerate</label>
+                <select
+                  id="export-framerate"
+                  className="modal-select"
+                  value={exportFramerate}
+                  onChange={(e) => setExportFramerate(Number(e.target.value))}
+                >
+                  {EXPORT_FRAMERATES.map((f) => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowExportModal(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => setShowExportModal(false)}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="footer">
         <p>

@@ -1,0 +1,2 @@
+/api/* https://manojkumhal.com.np/api/:splat 200!
+/* /index.html 200
