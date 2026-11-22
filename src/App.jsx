@@ -73,6 +73,52 @@ export default function App() {
   const [timelineScenes, setTimelineScenes] = useState([]);
   const [selectedScene, setSelectedScene] = useState(null);
 
+  // YouTube OAuth state
+  const [youtubeConnected, setYoutubeConnected] = useState(false);
+  const [youtubeChannel, setYoutubeChannel] = useState(null);
+  const [youtubeTokens, setYoutubeTokens] = useState(null);
+  const [showYoutubeModal, setShowYoutubeModal] = useState(false);
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [youtubeError, setYoutubeError] = useState("");
+  const [autoPublishYoutube, setAutoPublishYoutube] = useState(false);
+  const [showYoutubeModal, setShowYoutubeModal] = useState(false);
+
+  // YouTube OAuth initialization
+  const codeClient = useRef(null);
+
+  useEffect(() => {
+    if (window.google) {
+      codeClient.current = window.google.accounts.oauth2.initCodeClient({
+        client_id: 'YOUR_GOOGLE_CLIENT_ID', // TODO: Replace with actual client ID from Google Cloud Console
+        scope: 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly',
+        callback: async (response) => {
+          if (response.code) {
+            handleYoutubeCallback(response.code);
+          }
+        },
+      });
+    }
+  }, []);
+
+  async function handleYoutubeCallback(code) {
+    setYoutubeLoading(true);
+    setYoutubeError("");
+    try {
+      const res = await fetch(`/api/youtube/oauth/callback?code=${code}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to exchange code");
+
+      setYoutubeChannel(data.channel);
+      setYoutubeTokens(data.tokens);
+      setYoutubeConnected(true);
+      localStorage.setItem("youtube-tokens", JSON.stringify(data.tokens));
+      setShowYoutubeModal(false);
+    } catch (e) {
+      setYoutubeError(e.message);
+    }
+    setYoutubeLoading(false);
+  }
+
   const [progressSteps] = useState([
     { key: "script", label: "Writing your script…" },
     { key: "images", label: "Painting scenes…" },
@@ -286,9 +332,16 @@ export default function App() {
           AI Video Studio
         </a>
         <div className="header-actions">
-          <button className="btn btn-ghost" aria-label="Sign in">
-            Sign in
-          </button>
+          {youtubeConnected && youtubeChannel ? (
+            <div className="youtube-channel" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <img src={youtubeChannel.thumbnail} alt={youtubeChannel.title} style={{ width: '32px', height: '32px', borderRadius: '50%' }} />
+              <span>{youtubeChannel.title}</span>
+            </div>
+          ) : (
+            <button className="btn btn-ghost" onClick={() => codeClient.current.requestCode()} disabled={youtubeLoading}>
+              {youtubeLoading ? "Connecting…" : "Connect YouTube"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -729,6 +782,19 @@ export default function App() {
                   ))}
                 </select>
               </div>
+              {youtubeConnected && (
+                <div className="modal-field" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                  <input
+                    type="checkbox"
+                    id="auto-publish"
+                    checked={autoPublishYoutube}
+                    onChange={(e) => setAutoPublishYoutube(e.target.checked)}
+                  />
+                  <label htmlFor="auto-publish" className="modal-label" style={{ marginBottom: 0 }}>
+                    Auto-publish to YouTube
+                  </label>
+                </div>
+              )}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowExportModal(false)}>Cancel</button>
