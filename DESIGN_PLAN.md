@@ -7,7 +7,7 @@
 
 ---
 
-## Color Palette (6 tokens)
+## Color Palette (9 tokens)
 
 | Token | Hex | Role |
 |-------|-----|------|
@@ -18,7 +18,8 @@
 | `muted` | `#64748B` | Slate — secondary text, disabled states |
 | `border` | `#E2E8F0` | Light gray — dividers, input borders |
 | `error` | `#F43F5E` | Rose — error states only |
-| `surface` | `#F8FAFC` | Subtle gray — secondary surfaces, hover |
+| `surface` | `#F1F5F9` | Subtle gray — secondary surfaces, hover (distinct from `paper`) |
+| `accent-text` | `#007A66` | Darker teal for accent-colored TEXT/links on light backgrounds (5:1 on `paper`) |
 
 **Rationale**: Avoids the generic "dark mode + neon accent" or "cream + terracotta" defaults. The deep navy (`ink`) feels cinematic (fitting for video), while the teal-cyan (`accent`) reads as "AI/generative" without being the overused purple. `paper`/`surface` give a clean, premium light mode.
 
@@ -45,7 +46,7 @@
 | Small | `14px` | 400 | 1.5 |
 | Label | `12px` | 500 | 1.4 | (uppercase, tracking 0.08em)
 
-**No all-caps for headlines. No single-word accent colors.** Type carries personality.
+**No all-caps for headlines.** Type carries personality.
 
 ---
 
@@ -54,7 +55,7 @@
 ### Hero (above fold)
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  [Logo]                                    [Sign In]    │
+│  [Logo]                          [About] [Support ♥]    │
 │                                                         │
 │        "Type an idea. Watch it become video."          │
 │                                                         │
@@ -126,7 +127,8 @@
   --muted: #64748B;
   --border: #E2E8F0;
   --error: #F43F5E;
-  --surface: #F8FAFC;
+  --surface: #F1F5F9;
+  --accent-text: #007A66;
 
   /* Type */
   --font-display: 'Space Grotesk', system-ui, sans-serif;
@@ -176,7 +178,7 @@
 
 - `prefers-reduced-motion`: disable stagger, scale hover, progress animations
 - Focus rings: `var(--shadow-glow)` on all interactive elements
-- Color contrast: AA+ on all text (ink/paper, accent/paper)
+- Color contrast: AA on all text. `accent` (#00D4AA) is only ~1.8:1 on `paper`, so NEVER use it for text on light backgrounds — use `accent-text`. Buttons: `ink` text on `accent` background (~10:1)
 - Semantic HTML: `<main>`, `<section>`, `<article>`, `<dialog>`, `<progress>`
 - ARIA labels on icon-only buttons
 
@@ -189,4 +191,5 @@
 3. **Progress/loading experience** (new component or inline)
 4. **Scene gallery** (horizontal scroll + grid)
 5. **Final video section**
-6. **Polish: empty states, errors, focus states**
+6. **Footer: About / Privacy / Terms / donation link (needed before AdSense)**
+7. **Polish: empty states, errors, focus states**

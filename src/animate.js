@@ -8,7 +8,7 @@ async function connect(token) {
   const opts = token ? { hf_token: token, token } : {};
   try {
     return await Client.connect(SPACE_URL, opts);
-  } catch (e) {
+  } catch {
     return await Client.connect(SPACE, opts);
   }
 }
@@ -94,7 +94,6 @@ export async function animateImage(imageUrl, prompt, token, onStatus) {
         found = findUrl(msg.data) || found;
       }
     }
-    console.log("AI video reply:", seen);
 
     if (!found) {
       const err = new Error(

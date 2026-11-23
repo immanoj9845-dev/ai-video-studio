@@ -1,5 +1,17 @@
 {
   "name": "ai-video-studio",
-  "pages_build_output_dir": "./dist",
-  "compatibility_date": "2025-11-01"
+  "main": "worker/index.js", // change to the real path of your worker file
+  "compatibility_date": "2025-11-01",
+
+  // Workers AI (script, image, voice)
+  "ai": { "binding": "AI" },
+
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS", // your worker calls env.ASSETS.fetch()
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"] // make sure /api calls reach the worker, never index.html
+  },
+
+  "observability": { "enabled": true } // lets you see console.error logs in the dashboard
 }
