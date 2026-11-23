@@ -49,6 +49,39 @@ async function runPool(tasks, limit) {
   await Promise.all(workers);
 }
 
+async function postBlob(path, body, fallbackMsg) {
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || fallbackMsg);
+      }
+      const blob = await res.blob();
+      if (!blob.size) throw new Error(fallbackMsg);
+      return blob;
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 1500)); // one automatic retry
+    }
+  }
+  throw lastErr;
+}
+
+function saveTextFile(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function revokeAll(...maps) {
   maps.forEach((m) =>
     Object.values(m).forEach((x) => x?.url && URL.revokeObjectURL(x.url))
@@ -200,16 +233,7 @@ export default function App() {
     const prompt =
       `${styleText}. Main character (same in every scene): ${character}. Scene: ${scene.image_prompt}`.slice(0, 1500);
     try {
-      const res = await fetch("/api/image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || "Image failed");
-      }
-      const blob = await res.blob();
+      const blob = await postBlob("/api/image", { prompt }, "Image failed");
       setImg(i, { status: "done", url: URL.createObjectURL(blob) });
     } catch (e) {
       setImg(i, { status: "error", message: e.message });
@@ -219,16 +243,7 @@ export default function App() {
   async function makeVoice(scene, i) {
     setVoice(i, { status: "loading" });
     try {
-      const res = await fetch("/api/voice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: scene.narration }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || "Voice failed");
-      }
-      const blob = await res.blob();
+      const blob = await postBlob("/api/voice", { text: scene.narration }, "Voice failed");
       setVoice(i, { status: "done", url: URL.createObjectURL(blob) });
     } catch (e) {
       setVoice(i, { status: "error", message: e.message });
@@ -305,7 +320,7 @@ export default function App() {
     try {
       const scenes = result.scenes.map((s, i) => ({
         imageUrl: images[i].url,
-        audioUrl: voices[i].url,
+        audioUrl: voices[i]?.status === "done" ? voices[i].url : null,
         text: s.narration,
         clipUrl: clips[i]?.status === "done" ? clips[i].url : null,
       }));
@@ -340,7 +355,22 @@ export default function App() {
   const allReady =
     result &&
     !loading &&
-    result.scenes.every((_, i) => images[i]?.status === "done" && voices[i]?.status === "done");
+    result.scenes.every(
+      (_, i) =>
+        images[i]?.status === "done" &&
+        (voices[i]?.status === "done" || voices[i]?.status === "error")
+    );
+  const missingVoices = result
+    ? result.scenes.filter((_, i) => voices[i]?.status === "error").length
+    : 0;
+
+  function downloadScript() {
+    const lines = [`${result.title}`, `Character: ${result.character}`, ""];
+    result.scenes.forEach((sc, i) => {
+      lines.push(`Scene ${i + 1}`, `Narration: ${sc.narration}`, `Image prompt: ${sc.image_prompt}`, "");
+    });
+    saveTextFile(`${(result.title || "script").replace(/[^a-z0-9]+/gi, "-")}.txt`, lines.join("\n"));
+  }
 
   const hasAnyScene = result && result.scenes.length > 0;
 
@@ -511,6 +541,9 @@ export default function App() {
               <div className="result-meta">
                 <span className="result-character">{result.character}</span>
                 <span>{result.scenes.length} scenes</span>
+                <button type="button" className="btn btn-ghost btn-small" onClick={downloadScript}>
+                  <DownloadIcon size={14} /> Script
+                </button>
               </div>
             </div>
 
@@ -584,6 +617,25 @@ export default function App() {
                             </button>
                           )}
                         </div>
+                        {img?.status === "error" && <p className="error-message">{img.message}</p>}
+                        {voice?.status === "error" && <p className="error-message">{voice.message}</p>}
+                        <div className="scene-actions">
+                          {img?.status === "done" && (
+                            <a className="btn btn-ghost btn-small" href={img.url} download={`scene-${i + 1}.jpg`}>
+                              <DownloadIcon size={14} /> Image
+                            </a>
+                          )}
+                          {voice?.status === "done" && (
+                            <a className="btn btn-ghost btn-small" href={voice.url} download={`scene-${i + 1}-voice.mp3`}>
+                              <DownloadIcon size={14} /> Voice
+                            </a>
+                          )}
+                          {clip?.status === "done" && (
+                            <a className="btn btn-ghost btn-small" href={clip.url} download={`scene-${i + 1}-clip.mp4`}>
+                              <DownloadIcon size={14} /> Clip
+                            </a>
+                          )}
+                        </div>
                         {clip?.status === "loading" && <p className="progress-message">{clip.message}</p>}
                         {clip?.status === "error" && <p className="error-message">{clip.message}</p>}
                         {voice?.status === "done" && (
@@ -602,6 +654,12 @@ export default function App() {
                 <div className="final-header">
                   <h2 id="final-title" className="final-title">Final Video</h2>
                 </div>
+                {missingVoices > 0 && !video && (
+                  <p className="progress-message" role="status">
+                    {missingVoices} scene{missingVoices > 1 ? "s have" : " has"} no voiceover yet. Use
+                    "Retry voice" above, or make the video now and those scenes will be silent.
+                  </p>
+                )}
 
                 {video ? (
                   <>

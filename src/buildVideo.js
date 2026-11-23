@@ -145,10 +145,15 @@ export async function buildVideo(scenes, onProgress, musicFile, options = {}) {
     const items = [];
     for (const s of scenes) {
       const img = await loadImage(s.imageUrl);
-      const arr = await (await fetch(s.audioUrl)).arrayBuffer();
-      const buf = await audioCtx.decodeAudioData(arr);
+      // a scene without voiceover stays silent for a time based on its text
+      let buf = null;
+      if (s.audioUrl) {
+        const arr = await (await fetch(s.audioUrl)).arrayBuffer();
+        buf = await audioCtx.decodeAudioData(arr);
+      }
+      const silentDur = Math.max(3, (s.text || "").split(/\s+/).length * 0.4);
       const video = s.clipUrl ? await loadVideo(s.clipUrl).catch(() => null) : null;
-      items.push({ img, buf, video, bg: makeBackground(img), text: s.text, motion: items.length % 4 });
+      items.push({ img, buf, silentDur, video, bg: makeBackground(img), text: s.text, motion: items.length % 4 });
     }
 
     if (musicFile) {
@@ -186,15 +191,17 @@ export async function buildVideo(scenes, onProgress, musicFile, options = {}) {
     for (let i = 0; i < items.length; i++) {
       onProgress(`Recording scene ${i + 1} of ${items.length}... keep this tab open and visible`);
       const item = items[i];
-      const src = audioCtx.createBufferSource();
-      src.buffer = item.buf;
-      src.connect(dest);
-      src.start();
+      if (item.buf) {
+        const src = audioCtx.createBufferSource();
+        src.buffer = item.buf;
+        src.connect(dest);
+        src.start();
+      }
       if (item.video) {
         item.video.currentTime = 0;
         await item.video.play().catch(() => {});
       }
-      const dur = item.buf.duration + 0.6;
+      const dur = (item.buf ? item.buf.duration : item.silentDur) + 0.6;
       const t0 = performance.now();
       await new Promise((resolve) => {
         function frame(now) {
